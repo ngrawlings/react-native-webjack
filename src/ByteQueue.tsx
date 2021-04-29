@@ -4,6 +4,8 @@ export class ByteQueue {
     first_buffer_position:number = 0
 
     length() {
+        console.log('ByteQueue: length')
+
         let count = 0
         for (let i=0; i<this.buffers.length; i++) {
             count += this.buffers[i].length;
@@ -12,6 +14,7 @@ export class ByteQueue {
     }
 
     append(buf:Uint8Array) {
+        console.log('ByteQueue: append')
         this.buffers.push(buf)
     }
 
@@ -27,11 +30,15 @@ export class ByteQueue {
             ret.set(this.buffers[0].subarray(this.first_buffer_position, this.first_buffer_position+count), 0);
             this.first_buffer_position += count;
 
+            console.log("all in first buffer")
+
             return ret;
         } else {
             ret.set(this.buffers[0].subarray(this.first_buffer_position, this.buffers[0].length), 0);
             this.first_buffer_position = 0;
-            this.buffers.shift();
+            this.buffers.splice(0, 1)
+
+            console.log("First buffer consumed", this.buffers)
         }
 
         while (ret_pos < count) {
@@ -39,10 +46,14 @@ export class ByteQueue {
                 ret.set(this.buffers[0].subarray(0, count-ret_pos), ret_pos);
                 this.first_buffer_position = count-ret_pos;
                 ret_pos += count-ret_pos;
+
+                console.log("last buffer required "+this.first_buffer_position+" "+ret_pos)
             } else {
                 ret.set(this.buffers[0], ret_pos);
                 ret_pos += this.buffers[0].length;
-                this.buffers.shift();
+                this.buffers.splice(0, 1)
+
+                console.log("loop buffer consumed")
             }
         }
 
@@ -68,25 +79,20 @@ export class ByteQueue {
         return this.buffers[buffer_index][index]
     }
 
-    findSequence(bytes:Uint8Array) {
+    findCharacter(byte:number) {
+        console.log('ByteQueue: findSequence')
+
         let pos = 0;
+
+        console.log(this.buffers)
 
         for (let i=0; i<this.buffers.length; i++) {
             let start = 0;
             if (i==0)
                 start = this.first_buffer_position
 
-            for (let x=start; x<this.buffers[i].length-bytes.length; i++) {
-                let found = true
-
-                for (let z=0; z<bytes.length; z++) {
-                    if (this.buffers[i][x+z] != bytes[z]) {
-                        found = false
-                        break;
-                    }
-                }
-
-                if (found == true)
+            for (let x=start; x<this.buffers[i].length; x++) {
+                if (this.buffers[i][x] == byte) 
                     return pos+x
             }
 

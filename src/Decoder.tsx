@@ -326,6 +326,8 @@ export class Decoder {
             ret[buffer_offset+x] = this.state.wordBuffer[x];
         }
 
+        this.state.wordBuffer = [];
+
         return ret;
       }
 

@@ -25,9 +25,10 @@ let decoder:Decoder = new Decoder(decoder_cofig);
 let two_way_audio_socket:TwoWayAudioSocket|null = null;
 
 let Webjack = {
-  init: (events:Events) => { two_way_audio_socket = new TwoWayAudioSocket(events)},
+  init: (events:Events) => { two_way_audio_socket = new TwoWayAudioSocket(events) },
   encode: (data:Uint8Array) => { return encoder.modulate(data); },
   decode: (data:Float32Array) => { return decoder.decode(data); },
+  process: (data:Float32Array) => { if (two_way_audio_socket != null) { two_way_audio_socket.processPCM(data) } },
   send:(data:Uint8Array) => { if (two_way_audio_socket != null) { two_way_audio_socket.appendToDataQueue(data); two_way_audio_socket.transmitDataQueue() } }
 };
 

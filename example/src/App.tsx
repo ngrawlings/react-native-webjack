@@ -13,25 +13,7 @@ export default function App() {
 
   const send = () => {
     let b = Buffer.from(text);
-        let pcm = Webjack.encode(b);
-
-        //console.log(pcm);
-
-        let pcm_bytes = Buffer.alloc(pcm.length*2);
-        let val = Buffer.alloc(2);
-        for (let i=0; i<pcm.length; i++) {
-          val.writeInt16BE(pcm[i]*32767);
-          pcm_bytes[i*2] = val[0];
-          pcm_bytes[(i*2)+1] = val[1];
-        }
-
-        //console.log(pcm_bytes.toString('hex'));
-
-        RawPcm.playback(pcm_bytes.toString('base64'));
-
-
-    //let dec = Webjack.decode(pcm);
-    //console.log(dec);
+    Webjack.send(b)
   }
 
   React.useEffect(() => {
@@ -47,6 +29,35 @@ export default function App() {
         }
       );
       if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+        Webjack.init({
+
+          sendPCM(pcm:Float32Array) {
+            console.log('sendPCM')
+
+            let pcm_bytes = Buffer.alloc(pcm.length*2);
+            let val = Buffer.alloc(2);
+            for (let i=0; i<pcm.length; i++) {
+              val.writeInt16BE(pcm[i]*32767);
+              pcm_bytes[i*2] = val[0];
+              pcm_bytes[(i*2)+1] = val[1];
+            }
+
+            RawPcm.playback(pcm_bytes.toString('base64'));
+
+            return pcm.length
+          },
+
+          onReceive(bytes:Uint8Array) {
+            let msg = ''
+            for (let i=0; i<bytes.length; i++)
+              msg += String.fromCharCode(bytes[i])
+
+            console.log(msg)
+            setMessage(msg)
+          }
+
+        })
+
         RawPcm.on('data', (data:string) => {
           let buffer = Buffer.from(data, "base64");
           let arr = new Int16Array(buffer.length/2)
@@ -64,10 +75,8 @@ export default function App() {
           }
           //console.log(flt);
 
-          let dec = Webjack.decode(flt);
-
-          if (dec.length>0)
-            setMessage(dec.toString());
+          // Feed the pcm data into the 2 way comm system
+          Webjack.process(flt)
 
         });
         RawPcm.record();

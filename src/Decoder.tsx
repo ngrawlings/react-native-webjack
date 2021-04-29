@@ -203,7 +203,7 @@ export class Decoder {
         }
       }
 
-      decode(samples:Float32Array){
+      decode(samples:Float32Array) {
         // start of time measurement
         // var a = performance.now();
 
@@ -312,7 +312,7 @@ export class Decoder {
             total_len += sequences[i].length;
         }
 
-        let ret = Buffer.alloc(total_len+this.state.wordBuffer.length);
+        let ret = new Uint8Array(total_len+this.state.wordBuffer.length);
 
         let buffer_offset = 0;
         for (let i=0; i<sequences.length; i++) {

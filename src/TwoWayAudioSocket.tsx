@@ -16,8 +16,6 @@ export interface Events {
 export class TwoWayAudioSocket {
 
     state:STATE = 'idle'
-    //master_state:MASTER_COMMAND = 'invalid'
-    //slave_state:SLAVE_COMMAND = 'invalid'
 
     encoder:Encoder = new Encoder({
         sampleRate: 44100,
@@ -54,6 +52,8 @@ export class TwoWayAudioSocket {
         setInterval(() => {
             if (this.in_session && this.last_packet < Date.now()-2000) {
                 this.state = 'idle'
+                this.pending_packet = null
+                //TODO if data is pending to be sent, the transfer should be restarted here
             }
         }, 1000)
     }
@@ -65,8 +65,6 @@ export class TwoWayAudioSocket {
 
     private sendStatusPacket(packet:string, flags:Uint8Array|null, resend:boolean) {
         const that = this
-
-        console.log(this.state+" sendStatusPacket "+packet)
 
         this.expected_receive = Date.now()
 
@@ -114,8 +112,6 @@ export class TwoWayAudioSocket {
 
         if (bytes.length>0) {
             this.expected_receive = 0;
-
-            console.log(this.state+' processPCM', bytes)
             this.input_buffer.append(bytes);
             this.process();
         }
@@ -125,15 +121,11 @@ export class TwoWayAudioSocket {
         while (this.input_buffer.length() > 0) {
             if (String.fromCharCode(this.input_buffer.getByte(0))[0] == '[') {
                 // Packet is in sync
-                console.log(this.state+' packet in sync')
 
                 let offset = this.input_buffer.findCharacter("]".charCodeAt(0))
-                console.log(this.state+' packet close offset '+offset)
                 if (offset > -1) {
                     // Full packet found
                     let packet = this.input_buffer.get(offset+1);
-                    console.log(this.state+' extracted packet ', packet)
-
                     this.processPacket(packet)
                 } else 
                     return
@@ -141,8 +133,6 @@ export class TwoWayAudioSocket {
             } else {
                 // Packet is not insync
                 // Try resync
-                console.log(this.state+' packet not insync')
-                
                 let offset = this.input_buffer.findCharacter("[".charCodeAt(0))
                 if (offset != -1) {
                     this.input_buffer.get(offset)
@@ -156,8 +146,6 @@ export class TwoWayAudioSocket {
 
     private processPacket(packet:Uint8Array) {
         const that = this
-
-        console.log(this.state+' processPacket', packet)
 
         function isArrayEqual(arr1:Uint8Array, arr2:Uint8Array) {
             if (arr1.length != arr2.length)
@@ -179,12 +167,9 @@ export class TwoWayAudioSocket {
 
                     // Peer accepted slave status
                     // set master status and send pending packets
-                    console.log(this.state+" sendPacket")
                     this.sendPacket();
 
                 } else if (packet[1] == "h".charCodeAt(0)) {
-
-                    console.log(this.state+" checking hash")
 
                     // Received a sent packet hash accept or reject [a][r]
                     let hash = md5(that.pending_packet)
@@ -192,8 +177,6 @@ export class TwoWayAudioSocket {
                     const reportedhashbytes = packet.subarray(2, 18);
 
                     if (isArrayEqual(hashbytes, reportedhashbytes)) {
-                        console.log(this.state+" accepting packet")
-
                         // The hash matched, send next packet or terminate
                         that.pending_packet = null
 
@@ -204,8 +187,6 @@ export class TwoWayAudioSocket {
                             this.sendStatusPacket('t', null, true) // terminate master slave state
                         }
                     } else {
-                        console.log(this.state+" rejecting packet")
-
                         // The hash did not match, reject and resend
                         this.sendStatusPacket('r', null, false)
                         this.resendPacket()
@@ -214,8 +195,6 @@ export class TwoWayAudioSocket {
                 } else if (packet[1] == "f".charCodeAt(0)) {
                     // slave acknowledged being freed
                     this.state = 'idle'
-
-                    console.log(this.state+" going to idle")
                 }
             } else if (this.state == 'slave') {
                 if (packet[1] == "p".charCodeAt(0)) {
@@ -250,7 +229,6 @@ export class TwoWayAudioSocket {
                         this.events.onReceive(packet_bytes)
                     }
 
-                    console.log(this.state+" going to idle")
                     this.state = 'idle'
                     this.sendStatusPacket('f', null, false)
                 }

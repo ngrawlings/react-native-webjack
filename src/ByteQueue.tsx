@@ -4,8 +4,6 @@ export class ByteQueue {
     first_buffer_position:number = 0
 
     length() {
-        console.log('ByteQueue: length')
-
         let count = 0
         for (let i=0; i<this.buffers.length; i++) {
             count += this.buffers[i].length;
@@ -14,7 +12,6 @@ export class ByteQueue {
     }
 
     append(buf:Uint8Array) {
-        console.log('ByteQueue: append')
         this.buffers.push(buf)
     }
 
@@ -30,15 +27,11 @@ export class ByteQueue {
             ret.set(this.buffers[0].subarray(this.first_buffer_position, this.first_buffer_position+count), 0);
             this.first_buffer_position += count;
 
-            console.log("all in first buffer")
-
             return ret;
         } else {
             ret.set(this.buffers[0].subarray(this.first_buffer_position, this.buffers[0].length), 0);
             this.first_buffer_position = 0;
             this.buffers.splice(0, 1)
-
-            console.log("First buffer consumed", this.buffers)
         }
 
         while (ret_pos < count) {
@@ -46,14 +39,10 @@ export class ByteQueue {
                 ret.set(this.buffers[0].subarray(0, count-ret_pos), ret_pos);
                 this.first_buffer_position = count-ret_pos;
                 ret_pos += count-ret_pos;
-
-                console.log("last buffer required "+this.first_buffer_position+" "+ret_pos)
             } else {
                 ret.set(this.buffers[0], ret_pos);
                 ret_pos += this.buffers[0].length;
                 this.buffers.splice(0, 1)
-
-                console.log("loop buffer consumed")
             }
         }
 
@@ -80,8 +69,6 @@ export class ByteQueue {
     }
 
     findCharacter(byte:number) {
-        console.log('ByteQueue: findSequence')
-
         let pos = 0;
 
         console.log(this.buffers)

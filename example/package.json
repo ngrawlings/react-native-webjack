@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@tradle/react-native-http": "^2.0.0",
+    "arraybuffer-equal": "^1.0.4",
     "assert": "^1.1.1",
     "browserify-zlib": "~0.1.4",
     "buffer": "^4.9.1",

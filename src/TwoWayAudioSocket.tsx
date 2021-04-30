@@ -46,10 +46,12 @@ export class TwoWayAudioSocket {
     expected_receive = 0
     last_packet = 0;
 
+    monitor
+
     constructor(events:Events) {
         this.events = events
 
-        setInterval(() => {
+        this.monitor = setInterval(() => {
             if (this.state == 'master' && this.last_packet < Date.now()-2000) {
                 this.state = 'idle'
                 this.transmitDataQueue()
@@ -318,6 +320,12 @@ export class TwoWayAudioSocket {
     transmitReset() {
         this.state = 'idle'
         this.sendStatusPacket('e', 0, null, false)
+    }
+
+    stop() {
+        clearInterval(this.monitor)
+        this.output_buffer.clear()
+        this.input_buffer.clear()
     }
 
 }

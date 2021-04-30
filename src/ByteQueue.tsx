@@ -49,6 +49,50 @@ export class ByteQueue {
         return ret
     }
 
+    peek(count:number) {
+        let available = this.length()
+        if (available<count)
+            count = available
+
+        let ret:Uint8Array = new Uint8Array(count)
+        let buffer_index = 1;
+        let ret_pos = this.buffers[0].length - this.first_buffer_position
+
+        if (count < ret_pos) {
+            ret.set(this.buffers[0].subarray(this.first_buffer_position, this.first_buffer_position+count), 0);
+            return ret;
+        } else {
+            ret.set(this.buffers[0].subarray(this.first_buffer_position, this.buffers[0].length), 0);
+        }
+
+        while (ret_pos < count) {
+            if (count-ret_pos < this.buffers[buffer_index].length) {
+                ret.set(this.buffers[buffer_index].subarray(0, count-ret_pos), ret_pos);
+                this.first_buffer_position = count-ret_pos;
+                ret_pos += count-ret_pos;
+                buffer_index++
+            } else {
+                ret.set(this.buffers[buffer_index], ret_pos);
+                ret_pos += this.buffers[buffer_index].length;
+                buffer_index++;
+            }
+        }
+
+        return ret
+    }
+
+    drop(count:number) {
+        this.first_buffer_position += count;
+
+        while (this.buffers.length>0 && this.first_buffer_position > this.buffers[0].length) {
+            this.first_buffer_position -= this.buffers[0].length
+            this.buffers.splice(0, 1)
+        }
+
+        if (this.first_buffer_position < 0)
+            this.first_buffer_position = 0
+    }
+
     clear() {
         this.buffers = []
         this.first_buffer_position = 0
@@ -59,19 +103,18 @@ export class ByteQueue {
         index += this.first_buffer_position
 
         while (index > 0) {
-            if (index <= this.buffers[buffer_index].length)
+            if (index < this.buffers[buffer_index].length)
                 break
 
             index -= this.buffers[buffer_index].length
             buffer_index++
         }
+
         return this.buffers[buffer_index][index]
     }
 
     findCharacter(byte:number) {
         let pos = 0;
-
-        console.log(this.buffers)
 
         for (let i=0; i<this.buffers.length; i++) {
             let start = 0;
@@ -91,6 +134,12 @@ export class ByteQueue {
         }
 
         return -1
+    }
+
+    dumpBuffers() {
+        for (let i=0; i<this.buffers.length; i++) {
+            console.log(this.buffers[i])
+        }
     }
 
 }

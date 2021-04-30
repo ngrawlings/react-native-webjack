@@ -11,6 +11,7 @@ const MAX_PACKET_SIZE = 1024
 export interface Events {
     sendPCM(pcm:Float32Array):number;
     onReceive(bytes:Uint8Array):void;
+    onError(error:string):void;
 }
 
 export class TwoWayAudioSocket {
@@ -43,17 +44,17 @@ export class TwoWayAudioSocket {
     events:Events
 
     expected_receive = 0
-    in_session = false
     last_packet = 0;
 
     constructor(events:Events) {
         this.events = events
 
         setInterval(() => {
-            if (this.in_session && this.last_packet < Date.now()-2000) {
+            if (this.state == 'master' && this.last_packet < Date.now()-2000) {
                 this.state = 'idle'
-                this.pending_packet = null
-                //TODO if data is pending to be sent, the transfer should be restarted here
+                this.transmitDataQueue()
+            } else if (this.state == 'idle' && (this.pending_packet != null || this.output_buffer.length() > 0)) {
+                this.transmitDataQueue()
             }
         }, 1000)
     }
@@ -63,16 +64,19 @@ export class TwoWayAudioSocket {
             this.events.sendPCM(this.encoder.modulate(this.pending_packet))
     }
 
-    private sendStatusPacket(packet:string, flags:Uint8Array|null, resend:boolean) {
+    private sendStatusPacket(packet:string, flag:number, data:Uint8Array|null, resend:boolean) {
         const that = this
 
         this.expected_receive = Date.now()
 
-        let packet_bytes =  new Uint8Array(3+(flags != null ? flags.length : 0));
+        let packet_bytes =  new Uint8Array(4+(data != null ? data.length : 0));
         packet_bytes[0] = "[".charCodeAt(0)
         packet_bytes[1] = packet.charCodeAt(0)
-        if (flags != null && flags.length>0)
-            packet_bytes.set(flags, 2)
+        packet_bytes[2] = flag
+
+        if (data != null && data.length>0)
+            packet_bytes.set(data, 3)
+
         packet_bytes[packet_bytes.length-1] = "]".charCodeAt(0)
 
         this.events.sendPCM(this.encoder.modulate(packet_bytes))
@@ -80,7 +84,7 @@ export class TwoWayAudioSocket {
         if (resend) {
             function hasReplay() {
                 if (that.expected_receive != 0 && that.expected_receive < Date.now()-1000) {
-                    that.sendStatusPacket(packet, flags, resend)
+                    that.sendStatusPacket(packet, flag, data, resend)
                 } else {
                     that.expected_receive = 0
                 }
@@ -92,10 +96,12 @@ export class TwoWayAudioSocket {
     private sendPacket() {
         if (this.state == 'master' && this.pending_packet == null) {
             let send_bytes = this.output_buffer.get(MAX_PACKET_SIZE)
-            let packet_bytes =  new Uint8Array(send_bytes.length+3);
+            let packet_bytes =  new Uint8Array(send_bytes.length+5);
             packet_bytes[0] = "[".charCodeAt(0)
             packet_bytes[1] = "p".charCodeAt(0)
-            packet_bytes.set(send_bytes, 2)
+            packet_bytes[2] = (send_bytes.length>>8)&0xFF
+            packet_bytes[3] = (send_bytes.length)&0xFF
+            packet_bytes.set(send_bytes, 4)
             packet_bytes[packet_bytes.length-1] = "]".charCodeAt(0)
 
             this.pending_packet = packet_bytes
@@ -103,6 +109,9 @@ export class TwoWayAudioSocket {
             this.events.sendPCM(this.encoder.modulate(packet_bytes))
 
             return true
+        } else if (this.state == 'master' && this.pending_packet != null) {
+            this.events.sendPCM(this.encoder.modulate(this.pending_packet))
+            return true;
         }
         return false
     }
@@ -118,19 +127,55 @@ export class TwoWayAudioSocket {
     }
 
     private process() {
-        while (this.input_buffer.length() > 0) {
+        while (this.input_buffer.length() >= 4) {
             if (String.fromCharCode(this.input_buffer.getByte(0))[0] == '[') {
                 // Packet is in sync
 
-                let offset = this.input_buffer.findCharacter("]".charCodeAt(0))
-                if (offset > -1) {
-                    // Full packet found
-                    let packet = this.input_buffer.get(offset+1);
-                    this.processPacket(packet)
-                } else 
-                    return
+                if (typeof this.input_buffer.getByte(1) === 'undefined') {
+                    console.log('packet type is undefined')
+                    this.input_buffer.dumpBuffers()
+                    return;
+                }
+
+                let type = String.fromCharCode(this.input_buffer.getByte(1))
+                let packet;
+
+                if (type == 'p') {
+                    
+                    let len = (this.input_buffer.getByte(2)<<8)&0xFF
+                    len |= this.input_buffer.getByte(3)&0xFF
+
+                    if (this.input_buffer.length() >= len+5)
+                        packet = this.input_buffer.get(len+5);
+                    else
+                        return
+
+                } else if (type == 'h') {
+
+                    if (this.input_buffer.length() >= 20)
+                        packet = this.input_buffer.get(20);
+                    else
+                        return
+
+                } else {
+
+                    if (this.input_buffer.length() >= 4)
+                        packet = this.input_buffer.get(4);
+                    else   
+                        return
+                }
+
+                if (String.fromCharCode(packet[packet.length-1]) != ']') {
+                    console.log("Data streem corruption, reseting state");
+                    this.state = 'idle';
+                    this.input_buffer.clear()
+                    this.sendStatusPacket('e', 0, null, false)
+                }
+
+                this.processPacket(packet)
 
             } else {
+
                 // Packet is not insync
                 // Try resync
                 let offset = this.input_buffer.findCharacter("[".charCodeAt(0))
@@ -159,6 +204,8 @@ export class TwoWayAudioSocket {
             return true
         }
 
+        this.last_packet = Date.now()
+
         if (packet[0] == "[".charCodeAt(0) && packet[packet.length-1] == "]".charCodeAt(0)) {
             if (packet[1] == "e".charCodeAt(0)) {
                 this.state = 'idle'
@@ -174,21 +221,21 @@ export class TwoWayAudioSocket {
                     // Received a sent packet hash accept or reject [a][r]
                     let hash = md5(that.pending_packet)
                     const hashbytes = new Uint8Array(hash.match(/.{1,2}/g).map((byte:any) => parseInt(byte, 16)));
-                    const reportedhashbytes = packet.subarray(2, 18);
+                    const reportedhashbytes = packet.subarray(3, 19);
 
                     if (isArrayEqual(hashbytes, reportedhashbytes)) {
                         // The hash matched, send next packet or terminate
                         that.pending_packet = null
 
                         if (that.output_buffer.length() > 0) {
-                            this.sendStatusPacket('a', null, false)
+                            this.sendStatusPacket('a', 0, null, false)
                             this.sendPacket()
                         } else {
-                            this.sendStatusPacket('t', null, true) // terminate master slave state
+                            this.sendStatusPacket('t', 0, null, true) // terminate master slave state
                         }
                     } else {
                         // The hash did not match, reject and resend
-                        this.sendStatusPacket('r', null, false)
+                        this.sendStatusPacket('r', 0, null, false)
                         this.resendPacket()
                     }
 
@@ -205,7 +252,7 @@ export class TwoWayAudioSocket {
                     const hashbytes = new Uint8Array(hash.match(/.{1,2}/g).map((byte:any) => parseInt(byte, 16)));
 
                     // Build packet hash confirmation packet
-                    this.sendStatusPacket('h', hashbytes, true)
+                    this.sendStatusPacket('h', 0, hashbytes, true)
 
                 } else if (packet[1] == "a".charCodeAt(0)) {
                     // Accepted packet hash, move on to next packet
@@ -230,25 +277,23 @@ export class TwoWayAudioSocket {
                     }
 
                     this.state = 'idle'
-                    this.sendStatusPacket('f', null, false)
+                    this.sendStatusPacket('f', 0, null, false)
+                } else if (packet[1] == "m".charCodeAt(0)) {
+                    this.sendStatusPacket('s', 0, null, true)
                 }
             } else {
                 if (packet[1] == "m".charCodeAt(0)) {
                     // Peer is asking for master status
                     // set slave status reply with slave [s]
                     this.state = 'slave'
-
-                    this.in_session = true
-                    this.last_packet = Date.now()
-
-                    this.sendStatusPacket('s', null, true)
+                    this.sendStatusPacket('s', 0, null, true)
 
                 } else {
-                    this.sendStatusPacket('e', null, false)
+                    this.sendStatusPacket('e', 0, null, false)
                 }
             }
         } else {
-            throw this.state+' Invalid Packet'
+            this.events.onError('Invalid Packet')
         }
     }
 
@@ -264,16 +309,15 @@ export class TwoWayAudioSocket {
         if (this.state == 'idle') {
             this.state = 'master'
 
-            this.in_session = true
             this.last_packet = Date.now()
             
-            this.sendStatusPacket('m', null, true)
+            this.sendStatusPacket('m', 0, null, true)
         }
     }
 
     transmitReset() {
         this.state = 'idle'
-        this.sendStatusPacket('e', null, false)
+        this.sendStatusPacket('e', 0, null, false)
     }
 
 }

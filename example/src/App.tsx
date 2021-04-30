@@ -32,8 +32,6 @@ export default function App() {
         Webjack.init({
 
           sendPCM(pcm:Float32Array) {
-            console.log('sendPCM')
-
             let pcm_bytes = Buffer.alloc(pcm.length*2);
             let val = Buffer.alloc(2);
             for (let i=0; i<pcm.length; i++) {
@@ -52,8 +50,12 @@ export default function App() {
             for (let i=0; i<bytes.length; i++)
               msg += String.fromCharCode(bytes[i])
 
-            console.log(msg)
+            console.log("onReceive: "+msg)
             setMessage(msg)
+          },
+
+          onError(error:string) {
+            console.log(error)
           }
 
         })

@@ -1,0 +1,84 @@
+import { ByteQueue } from './ByteQueue'
+
+export class BitStore {
+
+    bytes:ByteQueue = new ByteQueue()
+    read_bit_offset = 0;
+    write_bit_offset = -1;
+
+    private generateMask(bits:number) {
+        let mask= 0;
+        for (let i=0; i<bits; i++) {
+            mask >>= 1
+            mask |= 0x80
+        }
+        return mask
+    }
+
+    private shiftLeft(bytes:Uint8Array, shift:number) {
+        bytes[0] <<= shift
+        for (let i=1; i<bytes.length; i++) {
+            bytes[i-1] |= bytes[i]>>(8-shift)
+            bytes[i] <<= shift
+        }
+        return bytes
+    }
+
+    appendBytes(bytes:Uint8Array) {
+        this.bytes.append(bytes)
+    }
+
+    appendBit(bit:boolean) {
+        this.write_bit_offset++
+        this.write_bit_offset %= 8;
+
+        if (this.write_bit_offset==0)
+            this.bytes.append(new Uint8Array(1))
+        
+        let blen = this.bytes.length()
+        let byte = this.bytes.getByte(blen-1);
+
+        if (byte != null) {
+            if (bit)
+                byte |= 1<<(7-this.write_bit_offset)
+            else
+                byte &= byte^(1<<(7-this.write_bit_offset))
+
+            this.bytes.setByte(blen-1, byte)
+        }
+    }
+
+    getBits(count:number) {
+        let byte_count = Math.floor(count/8)
+        let bit_shift = count%8
+
+        let get_count = byte_count
+        if (this.read_bit_offset > 0 || bit_shift > 0)
+            get_count++
+
+        if (this.read_bit_offset + bit_shift > 8)
+            get_count++
+
+        let bytes = this.bytes.peek(get_count)
+        bytes = this.shiftLeft(bytes, this.read_bit_offset)
+
+        this.bytes.drop(byte_count+(this.read_bit_offset+bit_shift>=8?1:0));
+        this.read_bit_offset = (this.read_bit_offset+bit_shift)%8
+
+        bytes[byte_count] &= this.generateMask(bit_shift)
+
+        return bytes.slice(0, byte_count+(bit_shift>0?1:0))
+    }
+
+    getBit(index:number) {
+        index += this.read_bit_offset
+
+        let byte_index = Math.floor(index/8)
+        let bit_pos = index%8
+
+        let byte = this.bytes.getByte(byte_index)
+
+        return ((byte >> bit_pos)&0x1) == 1
+    }
+
+}

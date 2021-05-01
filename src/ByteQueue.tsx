@@ -102,15 +102,30 @@ export class ByteQueue {
         let buffer_index = 0
         index += this.first_buffer_position
 
-        while (index > 0) {
+        while (index >= 0) {
             if (index < this.buffers[buffer_index].length)
-                break
+                return this.buffers[buffer_index][index]
 
             index -= this.buffers[buffer_index].length
             buffer_index++
         }
 
-        return this.buffers[buffer_index][index]
+        return 0
+    }
+
+    setByte(index:number, b:number) {
+        let buffer_index = 0
+        index += this.first_buffer_position
+
+        while (this.buffers.length > buffer_index && index >= 0) {
+            if (index < this.buffers[buffer_index].length) {
+                this.buffers[buffer_index][index] = b
+                return
+            }
+
+            index -= this.buffers[buffer_index].length
+            buffer_index++
+        }
     }
 
     findCharacter(byte:number) {

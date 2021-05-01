@@ -289,9 +289,9 @@ export class TwoWayAudioSocket {
                     // set slave status reply with slave [s]
                     this.state = 'slave'
                     this.sendStatusPacket('s', 0, null, true)
-
-                } else {
-                    this.sendStatusPacket('e', 0, null, false)
+                } else if (packet[1] != "f".charCodeAt(0) && packet[1] != "t".charCodeAt(0)) {
+                    console.log('idle, unrecognised command '+String.fromCharCode(packet[1]))
+                    this.sendStatusPacket('e', 0, null, false) 
                 }
             }
         } else {

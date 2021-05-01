@@ -89,12 +89,16 @@ export default function App() {
 
   return (
     <View style={styles.container}>
+      <View style={{flex:1, flexDirection:'column', width:'100%'}}>
       <Text>{message}</Text>
+      </View>
+      <View style={{flex:1, flexDirection:'column', width:'100%'}}>
       <TextInput
         style={styles.input}
         onChangeText={onChangeText}
         value={text}
       />
+      </View>
       <Button onPress={send} title="Send"/>
     </View>
   );
@@ -112,8 +116,9 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   input: {
-    height: 40,
-    margin: 12,
+    height: '100%',
+    width: '100%',
+    margin: 2,
     borderWidth: 1,
   }
 });

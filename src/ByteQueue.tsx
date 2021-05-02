@@ -102,7 +102,7 @@ export class ByteQueue {
         let buffer_index = 0
         index += this.first_buffer_position
 
-        while (index >= 0) {
+        while (this.buffers.length > buffer_index && index >= 0) {
             if (index < this.buffers[buffer_index].length)
                 return this.buffers[buffer_index][index]
 

@@ -15,15 +15,6 @@ export class BitStore {
         return mask
     }
 
-    private generateLowMask(bits:number) {
-        let mask= 0;
-        for (let i=0; i<bits; i++) {
-            mask <<= 1
-            mask |= 0x1
-        }
-        return mask
-    }
-
     private shiftLeft(bytes:Uint8Array, shift:number) {
         bytes[0] <<= shift
         for (let i=1; i<bytes.length; i++) {
@@ -35,6 +26,10 @@ export class BitStore {
 
     length() {
         return this.bytes.length()
+    }
+
+    getBytes() {
+        return this.bytes
     }
 
     clear() {
@@ -97,7 +92,23 @@ export class BitStore {
 
         let byte = this.bytes.getByte(byte_index)
 
-	return ((byte >> (7-bit_pos))&0x1) == 1
+	    return ((byte >> (7-bit_pos))&0x1) == 1
+    }
+
+    setBit(index:number, val:boolean) {
+        index += this.read_bit_offset
+
+        let byte_index = Math.floor(index/8)
+        let bit_pos = index%8
+
+        let byte = this.bytes.getByte(byte_index)
+
+        if (val) 
+            byte |= 0x01<<(7-bit_pos)
+        else 
+            byte = (byte & 0xFF^(0x01<<(7-bit_pos)))
+
+        this.bytes.setByte(byte_index, byte)
     }
 
     shiftBitsRight(index:number) {
@@ -121,7 +132,7 @@ export class BitStore {
         }
     }
 
-    extractByte(indexes:Uint8Array) {
+    extractByte(indexes:number[]) {
         if (indexes.length != 8)
             throw "8 indexes required to create a byte"
 

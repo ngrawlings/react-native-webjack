@@ -1,6 +1,7 @@
 import { Encoder } from './Encoder'
 import { Decoder } from './Decoder'
 import { ByteQueue } from './ByteQueue'
+import { HammingCodes } from './HammingCodes'
 
 const md5 = require('md5')
 
@@ -97,7 +98,16 @@ export class TwoWayAudioSocket {
 
     private sendPacket() {
         if (this.state == 'master' && this.pending_packet == null) {
-            let send_bytes = this.output_buffer.get(MAX_PACKET_SIZE)
+            // Only sending one hamming code block at a time for now TODO: pack more than a single hamming code block
+            
+            let bytes = this.output_buffer.get(30);
+            if (bytes.length < 30) {
+                let tmp = new Uint8Array(30);
+                tmp.set(bytes, 0)
+                bytes = tmp
+            }
+
+            let send_bytes = HammingCodes.encode(bytes) // 30 bytes will become 32 when encoded with hamming codes
             let packet_bytes =  new Uint8Array(send_bytes.length+5);
             packet_bytes[0] = "[".charCodeAt(0)
             packet_bytes[1] = "p".charCodeAt(0)
@@ -142,8 +152,10 @@ export class TwoWayAudioSocket {
                 let type = String.fromCharCode(this.input_buffer.getByte(1))
                 let packet;
 
+                console.log(this.state+' '+type)
+
                 if (type == 'p') {
-                    
+
                     let len = (this.input_buffer.getByte(2)<<8)&0xFF
                     len |= this.input_buffer.getByte(3)&0xFF
 
@@ -166,6 +178,8 @@ export class TwoWayAudioSocket {
                     else   
                         return
                 }
+
+                console.log(this.state, packet)
 
                 if (String.fromCharCode(packet[packet.length-1]) != ']') {
                     console.log("Data streem corruption, reseting state");
@@ -249,12 +263,20 @@ export class TwoWayAudioSocket {
                 if (packet[1] == "p".charCodeAt(0)) {
 
                     // Receive packet, replay with packet hash [h]
-                    this.pending_packet = packet
-                    let hash = md5(packet)
-                    const hashbytes = new Uint8Array(hash.match(/.{1,2}/g).map((byte:any) => parseInt(byte, 16)));
-
+                    let packet_bytes = packet.subarray(2, packet.length-1);
+                    let blocks = 0;
+                    while (packet.length>0) {
+                        let block:Uint8Array|null = packet_bytes.slice(0, 32)
+                        block = HammingCodes.decode(block)
+                        if (block == null) {
+                            this.sendStatusPacket('a', blocks, null, true)
+                            return
+                        }
+                        blocks++;
+                    }
+                    
                     // Build packet hash confirmation packet
-                    this.sendStatusPacket('h', 0, hashbytes, true)
+                    this.sendStatusPacket('a', blocks, null, true)
 
                 } else if (packet[1] == "a".charCodeAt(0)) {
                     // Accepted packet hash, move on to next packet

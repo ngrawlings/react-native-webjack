@@ -3,7 +3,7 @@ import { BitStore } from './BitStore'
 
 export class HammingCodes {
 
-    getByteParity(byte:number, bit_start:number, bit_count:number, bit_step:number) {
+    static getByteParity(byte:number, bit_start:number, bit_count:number, bit_step:number) {
         let s = 0
         byte <<= bit_start
 
@@ -15,7 +15,7 @@ export class HammingCodes {
         return s>>7
     }
 
-    encode(payload:Uint8Array) {
+    static encode(payload:Uint8Array) {
         if (payload.length != 30)
             throw "payload should be exactly 30 bytes long"
 
@@ -56,26 +56,31 @@ export class HammingCodes {
         parity[6] = (rows[2]^rows[3]^rows[6]^rows[7]^rows[10]^rows[11]^rows[14]^rows[15])&0xFF
         parity[7] = (rows[4]^rows[5]^rows[6]^rows[7]^rows[12]^rows[13]^rows[14]^rows[15])&0xFF
         parity[8] = (rows[8]^rows[9]^rows[10]^rows[11]^rows[12]^rows[13]^rows[14]^rows[15])&0xFF
-            
-            
+
         for (let i=1, x=1; i<9; i++, x*=2) {
-            console.log(x, parity[i])
+            parity[0] = (parity[0]^parity[i])&(parity[0]|parity[i])
             if (parity[i]>0) {
                 console.log("bit set: "+parity[i])
                 bitstore.setBit(x, true)
             }
         }
+        if (parity[0])
+            bitstore.setBit(0, true)
             
         return bitstore.getBytes().get(32)
     }
 
-    decode(payload:Uint8Array) {
+    static check(payload:Uint8Array|BitStore) {
         if (payload.length != 32)
-            throw "payload should be exactly 32 bytes long"
+        throw "payload should be exactly 32 bytes long"
 
-        let bitstore:BitStore = new BitStore()
-
-        bitstore.appendBytes(payload)
+        let bitstore:BitStore
+        if (payload instanceof Uint8Array) {
+            bitstore = new BitStore()
+            bitstore.appendBytes(payload)
+        } else {
+            bitstore = payload
+        }
 
         let c=0, c0=0, c1=0
         let rows:number[] = []
@@ -108,14 +113,36 @@ export class HammingCodes {
         let error = false
         let bit = 0
         for (let i=1, x=1; i<9; i++, x*=2) {
+            parity[0] = (parity[0]^parity[i])&(parity[0]|parity[i])
             if (parity[i]>0) {
                 error = true
                 bit |= x
             }
         }
 
-        if (error)
-            bitstore.setBit(bit, !bitstore.getBit(bit))
+        if (!error && bitstore.getBit(0) != parity[0]>0)
+            return 0;
+
+        return error ? bit : -1
+    }
+
+    static decode(payload:Uint8Array) {
+        let bitstore:BitStore = new BitStore()
+        bitstore.appendBytes(payload)
+
+        let error_bit = HammingCodes.check(bitstore)
+
+        if (error_bit > 0) {
+            bitstore.setBit(error_bit, !bitstore.getBit(error_bit))
+
+            //Check again to make sure it has been corrected and it is not a multi bit corruption
+            error_bit = HammingCodes.check(bitstore)
+            if (error_bit != -1)
+                return null
+
+        } else if (error_bit == 0) {
+            return null;
+        }
 
         let ret = new Uint8Array(30)
 

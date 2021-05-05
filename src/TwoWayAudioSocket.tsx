@@ -2,12 +2,11 @@ import { Encoder } from './Encoder'
 import { Decoder } from './Decoder'
 import { ByteQueue } from './ByteQueue'
 import { HammingCodes } from './HammingCodes'
-
-const md5 = require('md5')
+import { ByteUtils } from './ByteUtils'
 
 export type STATE = 'idle'|'master'|'slave'
 
-const MAX_PACKET_SIZE = 1024
+//const MAX_PACKET_SIZE = 1024
 
 export interface Events {
     sendPCM(pcm:Float32Array):number;
@@ -38,14 +37,15 @@ export class TwoWayAudioSocket {
     output_buffer:ByteQueue = new ByteQueue()
     input_buffer:ByteQueue = new ByteQueue()
 
-    pending_packet:Uint8Array|null = null;
-
     packet_byte_stream:ByteQueue = new ByteQueue()
 
     events:Events
 
     expected_receive = 0
     last_packet = 0;
+
+    outgoing_block = 0
+    incoming_block = 0
 
     monitor
 
@@ -56,15 +56,8 @@ export class TwoWayAudioSocket {
             if (this.state == 'master' && this.last_packet < Date.now()-2000) {
                 this.state = 'idle'
                 this.transmitDataQueue()
-            } else if (this.state == 'idle' && (this.pending_packet != null || this.output_buffer.length() > 0)) {
-                this.transmitDataQueue()
             }
         }, 1000)
-    }
-
-    private resendPacket() {
-        if (this.pending_packet != null)
-            this.events.sendPCM(this.encoder.modulate(this.pending_packet))
     }
 
     private sendStatusPacket(packet:string, flag:number, data:Uint8Array|null, resend:boolean) {
@@ -97,10 +90,10 @@ export class TwoWayAudioSocket {
     }
 
     private sendPacket() {
-        if (this.state == 'master' && this.pending_packet == null) {
+        if (this.state == 'master') {
             // Only sending one hamming code block at a time for now TODO: pack more than a single hamming code block
             
-            let bytes = this.output_buffer.get(30);
+            let bytes = this.output_buffer.peek(30);
             if (bytes.length < 30) {
                 let tmp = new Uint8Array(30);
                 tmp.set(bytes, 0)
@@ -108,23 +101,18 @@ export class TwoWayAudioSocket {
             }
 
             let send_bytes = HammingCodes.encode(bytes) // 30 bytes will become 32 when encoded with hamming codes
-            let packet_bytes =  new Uint8Array(send_bytes.length+5);
+            let packet_bytes =  new Uint8Array(send_bytes.length+7)
             packet_bytes[0] = "[".charCodeAt(0)
             packet_bytes[1] = "p".charCodeAt(0)
-            packet_bytes[2] = (send_bytes.length>>8)&0xFF
-            packet_bytes[3] = (send_bytes.length)&0xFF
-            packet_bytes.set(send_bytes, 4)
+            packet_bytes.set(ByteUtils.shortToBytes(send_bytes.length/32), 2)  
+            packet_bytes.set(ByteUtils.shortToBytes(this.outgoing_block), 4)  // Outgoing block numnber, short overlaps every 65536 blocks, This needs to be fixed later
+            packet_bytes.set(send_bytes, 6)
             packet_bytes[packet_bytes.length-1] = "]".charCodeAt(0)
-
-            this.pending_packet = packet_bytes
 
             this.events.sendPCM(this.encoder.modulate(packet_bytes))
 
             return true
-        } else if (this.state == 'master' && this.pending_packet != null) {
-            this.events.sendPCM(this.encoder.modulate(this.pending_packet))
-            return true;
-        }
+        } 
         return false
     }
 
@@ -158,16 +146,10 @@ export class TwoWayAudioSocket {
 
                     let len = (this.input_buffer.getByte(2)<<8)&0xFF
                     len |= this.input_buffer.getByte(3)&0xFF
+                    len *= 32; // Convert from block coutn to byte length
 
-                    if (this.input_buffer.length() >= len+5)
-                        packet = this.input_buffer.get(len+5);
-                    else
-                        return
-
-                } else if (type == 'h') {
-
-                    if (this.input_buffer.length() >= 20)
-                        packet = this.input_buffer.get(20);
+                    if (this.input_buffer.length() >= len+7)
+                        packet = this.input_buffer.get(len+7);
                     else
                         return
 
@@ -186,6 +168,7 @@ export class TwoWayAudioSocket {
                     this.state = 'idle';
                     this.input_buffer.clear()
                     this.sendStatusPacket('e', 0, null, false)
+                    return
                 }
 
                 this.processPacket(packet)
@@ -206,20 +189,6 @@ export class TwoWayAudioSocket {
     }
 
     private processPacket(packet:Uint8Array) {
-        const that = this
-
-        function isArrayEqual(arr1:Uint8Array, arr2:Uint8Array) {
-            if (arr1.length != arr2.length)
-                return false
-
-            for (let i=0; i<arr1.length; i++) {
-                if (arr1[i] != arr2[i])
-                    return false
-            }
-
-            return true
-        }
-
         this.last_packet = Date.now()
 
         if (packet[0] == "[".charCodeAt(0) && packet[packet.length-1] == "]".charCodeAt(0)) {
@@ -232,28 +201,20 @@ export class TwoWayAudioSocket {
                     // set master status and send pending packets
                     this.sendPacket();
 
-                } else if (packet[1] == "h".charCodeAt(0)) {
+                } else if (packet[1] == "a".charCodeAt(0)) {
 
-                    // Received a sent packet hash accept or reject [a][r]
-                    let hash = md5(that.pending_packet)
-                    const hashbytes = new Uint8Array(hash.match(/.{1,2}/g).map((byte:any) => parseInt(byte, 16)));
-                    const reportedhashbytes = packet.subarray(3, 19);
+                    let accepted_blocks = (this.input_buffer.getByte(2)<<8)&0xFF
+                    accepted_blocks |= this.input_buffer.getByte(3)&0xFF
 
-                    if (isArrayEqual(hashbytes, reportedhashbytes)) {
-                        // The hash matched, send next packet or terminate
-                        that.pending_packet = null
+                    console.log('slave accepoted '+accepted_blocks+' block(s)')
 
-                        if (that.output_buffer.length() > 0) {
-                            this.sendStatusPacket('a', 0, null, false)
-                            this.sendPacket()
-                        } else {
-                            this.sendStatusPacket('t', 0, null, true) // terminate master slave state
-                        }
-                    } else {
-                        // The hash did not match, reject and resend
-                        this.sendStatusPacket('r', 0, null, false)
-                        this.resendPacket()
-                    }
+                    if (accepted_blocks>0)
+                        this.output_buffer.drop(30*accepted_blocks) // drop 30 bytes per accepted block
+
+                    if (this.output_buffer.length() > 0)
+                        this.sendPacket()
+                    else 
+                        this.sendStatusPacket('t', 0, null, true)
 
                 } else if (packet[1] == "f".charCodeAt(0)) {
                     // slave acknowledged being freed
@@ -263,45 +224,33 @@ export class TwoWayAudioSocket {
                 if (packet[1] == "p".charCodeAt(0)) {
 
                     // Receive packet, replay with packet hash [h]
-                    let packet_bytes = packet.subarray(2, packet.length-1);
+                    let first_block = ByteUtils.bytesToShort(packet.subarray(2, 4));
+                    let packet_bytes = packet.subarray(6, packet.length-1);
                     let blocks = 0;
-                    while (packet.length>0) {
-                        let block:Uint8Array|null = packet_bytes.slice(0, 32)
-                        block = HammingCodes.decode(block)
-                        if (block == null) {
-                            this.sendStatusPacket('a', blocks, null, true)
-                            return
+
+                    if (this.incoming_block+1 == first_block) {
+                        while (packet.length>0) {
+                            let block:Uint8Array|null = packet_bytes.slice(0, 32)
+                            block = HammingCodes.decode(block)
+                            if (block == null) {
+                                this.sendStatusPacket('a', blocks, null, true)
+                                return
+                            }
+                            this.events.onReceive(block)
+
+                            blocks++;
+                            this.incoming_block++;
                         }
-                        blocks++;
                     }
                     
                     // Build packet hash confirmation packet
                     this.sendStatusPacket('a', blocks, null, true)
 
-                } else if (packet[1] == "a".charCodeAt(0)) {
-                    // Accepted packet hash, move on to next packet
-                    if (that.pending_packet != null) {
-                        let packet_bytes = that.pending_packet.subarray(2, that.pending_packet.length-1);
-                        that.pending_packet = null
-
-                        this.events.onReceive(packet_bytes)
-                    }
-
-                } else if (packet[1] == "r".charCodeAt(0)) {
-                    // Rejected packet hash, drop packet
-                    that.pending_packet = null
-
                 } else if (packet[1] == "t".charCodeAt(0)) {
                     // Master/slave status terminated
-                    if (that.pending_packet != null) {
-                        let packet_bytes = that.pending_packet.subarray(2, that.pending_packet.length-1);
-                        that.pending_packet = null
-
-                        this.events.onReceive(packet_bytes)
-                    }
-
                     this.state = 'idle'
                     this.sendStatusPacket('f', 0, null, false)
+
                 } else if (packet[1] == "m".charCodeAt(0)) {
                     this.sendStatusPacket('s', 0, null, true)
                 }

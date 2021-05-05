@@ -84,7 +84,7 @@ export default function App() {
         RawPcm.record();
       }
       
-    })();
+    })();  
   }, []);
 
   return (

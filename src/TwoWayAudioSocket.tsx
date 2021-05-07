@@ -100,11 +100,7 @@ export class TwoWayAudioSocket {
                 bytes = tmp
             }
 
-            console.log('packing ', bytes)
-
             let send_bytes = HammingCodes.encode(bytes) // 30 bytes will become 32 when encoded with hamming codes
-            
-            console.log('bytes', send_bytes)
             
             let packet_bytes =  new Uint8Array(send_bytes.length+7)
             packet_bytes[0] = "[".charCodeAt(0)
@@ -113,8 +109,6 @@ export class TwoWayAudioSocket {
             packet_bytes.set(ByteUtils.shortToBytes(this.outgoing_block), 4)  // Outgoing block numnber, short overlaps every 65536 blocks, This needs to be fixed later
             packet_bytes.set(send_bytes, 6)
             packet_bytes[packet_bytes.length-1] = "]".charCodeAt(0)
-
-            console.log('sending packet ', packet_bytes)
 
             this.events.sendPCM(this.encoder.modulate(packet_bytes))
 

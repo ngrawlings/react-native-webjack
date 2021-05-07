@@ -82,7 +82,7 @@ export class HammingCodes {
             bitstore = payload
         }
 
-        let c=0, c0=0, c1=0
+        let c0=0, c1=0
         let rows:number[] = []
 
         let bq = bitstore.getBytes()
@@ -96,7 +96,6 @@ export class HammingCodes {
             c0 = (c0^b0)&(c0|b0)
             c1 = (c1^b1)&(c1|b1)
         }
-        c = (c0^c1)&(c0|c1)
 
         let parity = new Uint8Array(9)
 

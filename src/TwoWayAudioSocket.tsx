@@ -45,7 +45,7 @@ export class TwoWayAudioSocket {
     last_packet = 0;
 
     outgoing_block = 0
-    incoming_block = 0
+    incoming_block = -1
 
     monitor
 
@@ -100,7 +100,12 @@ export class TwoWayAudioSocket {
                 bytes = tmp
             }
 
+            console.log('packing ', bytes)
+
             let send_bytes = HammingCodes.encode(bytes) // 30 bytes will become 32 when encoded with hamming codes
+            
+            console.log('bytes', send_bytes)
+            
             let packet_bytes =  new Uint8Array(send_bytes.length+7)
             packet_bytes[0] = "[".charCodeAt(0)
             packet_bytes[1] = "p".charCodeAt(0)
@@ -108,6 +113,8 @@ export class TwoWayAudioSocket {
             packet_bytes.set(ByteUtils.shortToBytes(this.outgoing_block), 4)  // Outgoing block numnber, short overlaps every 65536 blocks, This needs to be fixed later
             packet_bytes.set(send_bytes, 6)
             packet_bytes[packet_bytes.length-1] = "]".charCodeAt(0)
+
+            console.log('sending packet ', packet_bytes)
 
             this.events.sendPCM(this.encoder.modulate(packet_bytes))
 
@@ -148,6 +155,8 @@ export class TwoWayAudioSocket {
                     len |= this.input_buffer.getByte(3)&0xFF
                     len *= 32; // Convert from block coutn to byte length
 
+                    console.log('Packet: '+len)
+
                     if (this.input_buffer.length() >= len+7)
                         packet = this.input_buffer.get(len+7);
                     else
@@ -167,7 +176,7 @@ export class TwoWayAudioSocket {
                     console.log("Data streem corruption, reseting state");
                     this.state = 'idle';
                     this.input_buffer.clear()
-                    this.sendStatusPacket('e', 0, null, false)
+                    this.sendStatusPacket('e', this.output_buffer.length()/30 > 255 ? 255 : Math.floor(this.output_buffer.length()/30), null, false)
                     return
                 }
 
@@ -194,6 +203,13 @@ export class TwoWayAudioSocket {
         if (packet[0] == "[".charCodeAt(0) && packet[packet.length-1] == "]".charCodeAt(0)) {
             if (packet[1] == "e".charCodeAt(0)) {
                 this.state = 'idle'
+
+                let blocks = Math.floor(this.output_buffer.length()/30)
+                if (blocks > packet[2]) {
+                    this.transmitDataQueue();
+                } else {
+                    this.sendStatusPacket('r', 0, null, true);
+                }
             } else if (this.state == 'master') {
                 if (packet[1] == "s".charCodeAt(0)) {
 
@@ -203,13 +219,13 @@ export class TwoWayAudioSocket {
 
                 } else if (packet[1] == "a".charCodeAt(0)) {
 
-                    let accepted_blocks = (this.input_buffer.getByte(2)<<8)&0xFF
-                    accepted_blocks |= this.input_buffer.getByte(3)&0xFF
+                    let accepted_blocks = packet[2]
 
-                    console.log('slave accepoted '+accepted_blocks+' block(s)')
-
-                    if (accepted_blocks>0)
+                    if (accepted_blocks>0) {
+                        console.log(accepted_blocks+' accepted')
+                        this.outgoing_block += accepted_blocks
                         this.output_buffer.drop(30*accepted_blocks) // drop 30 bytes per accepted block
+                    }
 
                     if (this.output_buffer.length() > 0)
                         this.sendPacket()
@@ -224,19 +240,32 @@ export class TwoWayAudioSocket {
                 if (packet[1] == "p".charCodeAt(0)) {
 
                     // Receive packet, replay with packet hash [h]
-                    let first_block = ByteUtils.bytesToShort(packet.subarray(2, 4));
+                    let first_block = ByteUtils.bytesToShort(packet.subarray(4, 6));
                     let packet_bytes = packet.subarray(6, packet.length-1);
                     let blocks = 0;
 
-                    if (this.incoming_block+1 == first_block) {
-                        while (packet.length>0) {
+                    console.log('first block', first_block)
+                    console.log('incoming_block', this.incoming_block)
+
+                    if (this.incoming_block+1 >= first_block) {
+                        while (packet_bytes.length>0) {
                             let block:Uint8Array|null = packet_bytes.slice(0, 32)
-                            block = HammingCodes.decode(block)
-                            if (block == null) {
+                            packet_bytes = packet_bytes.slice(32)
+
+                            if (this.incoming_block >= (first_block+blocks)) {
+                                blocks++;
+                                continue;
+                            }
+
+                            let unpacked = HammingCodes.decode(block)
+                            if (unpacked == null) {
+                                console.log('block corrupted ', HammingCodes.unpack(block))
                                 this.sendStatusPacket('a', blocks, null, true)
                                 return
                             }
-                            this.events.onReceive(block)
+
+                            if (unpacked.length>0)
+                                this.events.onReceive(unpacked)
 
                             blocks++;
                             this.incoming_block++;
@@ -260,9 +289,18 @@ export class TwoWayAudioSocket {
                     // set slave status reply with slave [s]
                     this.state = 'slave'
                     this.sendStatusPacket('s', 0, null, true)
+
+                } else if (packet[1] == "r".charCodeAt(0)) {
+
+                    if (this.output_buffer.length() > 0) {
+                        this.transmitDataQueue()
+                    }
+
                 } else if (packet[1] != "f".charCodeAt(0) && packet[1] != "t".charCodeAt(0)) {
+
                     console.log('idle, unrecognised command '+String.fromCharCode(packet[1]))
-                    this.sendStatusPacket('e', 0, null, false) 
+                    this.sendStatusPacket('e', this.output_buffer.length()/30 > 255 ? 255 : Math.floor(this.output_buffer.length()/30), null, false) 
+
                 }
             }
         } else {
@@ -290,7 +328,7 @@ export class TwoWayAudioSocket {
 
     transmitReset() {
         this.state = 'idle'
-        this.sendStatusPacket('e', 0, null, false)
+        this.sendStatusPacket('e', this.output_buffer.length()/30 > 255 ? 255 : Math.floor(this.output_buffer.length()/30), null, false)
     }
 
     stop() {

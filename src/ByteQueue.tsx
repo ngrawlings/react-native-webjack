@@ -82,6 +82,9 @@ export class ByteQueue {
     }
 
     drop(count:number) {
+        if (this.length() < count)
+            count = this.length()
+
         this.first_buffer_position += count;
 
         while (this.buffers.length>0 && this.first_buffer_position > this.buffers[0].length) {

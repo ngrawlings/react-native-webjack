@@ -120,7 +120,8 @@ export class BitStore {
         let low_bit
         let length = this.bytes.length();
 
-        current_byte = (current_byte & 0xFF^(0x01<<(7-bit_index)))
+        let high_mask = this.generateHighMask(bit_index);
+        current_byte = ((current_byte&high_mask) | (current_byte>>1) & (0xFF^(0x01<<(7-bit_index))))
         this.bytes.setByte(byte_index, current_byte)
 
         for (let i=++byte_index; i<length; i++) {

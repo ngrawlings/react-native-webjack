@@ -60,7 +60,6 @@ export class HammingCodes {
         for (let i=1, x=1; i<9; i++, x*=2) {
             parity[0] = (parity[0]^parity[i])&(parity[0]|parity[i])
             if (parity[i]>0) {
-                console.log("bit set: "+parity[i])
                 bitstore.setBit(x, true)
             }
         }
@@ -71,7 +70,8 @@ export class HammingCodes {
     }
 
     static check(payload:Uint8Array|BitStore) {
-        if (payload.length != 32)
+        let len = (payload instanceof BitStore ? payload.length() : payload.length)
+        if (len != 32)
         throw "payload should be exactly 32 bytes long"
 
         let bitstore:BitStore
@@ -100,6 +100,9 @@ export class HammingCodes {
 
         let parity = new Uint8Array(9)
 
+        let bzero = bitstore.getBit(0)
+        bitstore.setBit(0, false)
+
         // Check 8 collumn, check all bits of c1
         parity[1] = this.getByteParity(c0, 1, 8, 2) ^ this.getByteParity(c1, 1, 8, 2)
         parity[2] = this.getByteParity(c0, 2, 2, 1) ^ this.getByteParity(c0, 6, 2, 1) ^ this.getByteParity(c1, 2, 2, 1) ^ this.getByteParity(c1, 6, 2, 1)
@@ -120,7 +123,7 @@ export class HammingCodes {
             }
         }
 
-        if (!error && bitstore.getBit(0) != parity[0]>0)
+        if (!error && !bzero != parity[0]>0)
             return 0;
 
         return error ? bit : -1
@@ -130,41 +133,62 @@ export class HammingCodes {
         let bitstore:BitStore = new BitStore()
         bitstore.appendBytes(payload)
 
+        console.log('bitstore length: '+bitstore.length())
+
         let error_bit = HammingCodes.check(bitstore)
 
         if (error_bit > 0) {
+            console.log('error found in packet '+error_bit)
             bitstore.setBit(error_bit, !bitstore.getBit(error_bit))
 
             //Check again to make sure it has been corrected and it is not a multi bit corruption
             error_bit = HammingCodes.check(bitstore)
-            if (error_bit != -1)
+            if (error_bit != -1) {
+                console.log('packet still contains errors')
                 return null
+            }
 
         } else if (error_bit == 0) {
-            return null;
+            return null; // Bit Zero does not check out, causing a lot of false errors at this time
         }
 
         let ret = new Uint8Array(30)
+        let bits = []
+        let byte_index = 0;
 
-        for (let i=0; i<30; i++) {
-            let x = 0
-            let bits = []
-            for (let l=0; l<8; l++, x++) {
-                switch ((i*8)+x) {
-                    case 0:
-                        x+=3
-                        break;
-                    case 4:
-                    case 8:
-                    case 16:
-                    case 32:
-                    case 64:
-                    case 128:
-                        x++;
-                }
-                bits.push((i*8)+x)
+        for (let i=0; i<256; i++) {
+            if (i==0 || i==1 || i==2 || i==4 || i==8 || i==16 || i==32 || i==64 || i==128)
+                continue;
+
+            bits.push(i)
+
+            if (bits.length == 8) {
+                ret[byte_index++] = bitstore.extractByte(bits)
+                bits = []
             }
-            ret[i] = bitstore.extractByte(bits)
+        }
+
+        return ret
+    }
+
+    static unpack(payload:Uint8Array) {
+        let bitstore:BitStore = new BitStore()
+        bitstore.appendBytes(payload)
+
+        let ret = new Uint8Array(30)
+        let bits = []
+        let byte_index = 0;
+
+        for (let i=0; i<256; i++) {
+            if (i==0 || i==1 || i==2 || i==4 || i==8 || i==16 || i==32 || i==64 || i==128)
+                continue;
+
+            bits.push(i)
+
+            if (bits.length == 8) {
+                ret[byte_index++] = bitstore.extractByte(bits)
+                bits = []
+            }
         }
 
         return ret

@@ -6,7 +6,7 @@ import { ByteUtils } from './ByteUtils'
 
 export type STATE = 'idle'|'master'|'slave'
 
-//const MAX_PACKET_SIZE = 1024
+const MAX_PACKET_SIZE = 512
 
 export interface Events {
     sendPCM(pcm:Float32Array):number;
@@ -91,16 +91,27 @@ export class TwoWayAudioSocket {
 
     private sendPacket() {
         if (this.state == 'master') {
-            // Only sending one hamming code block at a time for now TODO: pack more than a single hamming code block
-            
-            let bytes = this.output_buffer.peek(30);
-            if (bytes.length < 30) {
-                let tmp = new Uint8Array(30);
-                tmp.set(bytes, 0)
-                bytes = tmp
-            }
+            let blocks = Math.floor(this.output_buffer.length()/32)
+            if (this.output_buffer.length()%32)
+                blocks++;
 
-            let send_bytes = HammingCodes.encode(bytes) // 30 bytes will become 32 when encoded with hamming codes
+            if (blocks > MAX_PACKET_SIZE/32)
+                blocks = Math.floor(MAX_PACKET_SIZE/32)
+
+            let send_bytes = new Uint8Array(blocks*32)
+            let bytes = this.output_buffer.peek(blocks*30)
+
+            for (let i=0; i<blocks; i++) {
+                let blk = bytes.subarray(i*30, (i+1)*30)
+
+                if (blk.length < 30) {
+                    let tmp = new Uint8Array(30);
+                    tmp.set(blk, 0)
+                    blk = tmp
+                }
+
+                send_bytes.set(HammingCodes.encode(blk), i*32)
+            }
             
             let packet_bytes =  new Uint8Array(send_bytes.length+7)
             packet_bytes[0] = "[".charCodeAt(0)

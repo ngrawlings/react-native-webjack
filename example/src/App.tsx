@@ -11,9 +11,21 @@ export default function App() {
   let [message, setMessage] = React.useState("");
   const [text, onChangeText] = React.useState("");
 
+  const lines:Array<string> = new Array<string>()
+
   const send = () => {
+    appendMessage("-> "+text)
     let b = Buffer.from(text);
     Webjack.send(b)
+  }
+
+  const appendMessage = (msg:string) => {
+    console.log('appendMessage: '+msg)
+    lines.push(msg)
+    setMessage(lines.join("\n"))
+    while (lines.length>12) {
+      lines.splice(0, 1)
+    }
   }
 
   React.useEffect(() => {
@@ -40,6 +52,8 @@ export default function App() {
               pcm_bytes[(i*2)+1] = val[1];
             }
 
+            appendMessage("Transmitting: "+pcm_bytes.length);
+
             RawPcm.playback(pcm_bytes.toString('base64'));
 
             return pcm.length
@@ -51,11 +65,12 @@ export default function App() {
               msg += String.fromCharCode(bytes[i])
 
             console.log("onReceive: "+msg)
-            setMessage(msg)
+            appendMessage("<- "+msg)
           },
 
           onError(error:string) {
             console.log(error)
+            appendMessage("Error: "+error)
           }
 
         })

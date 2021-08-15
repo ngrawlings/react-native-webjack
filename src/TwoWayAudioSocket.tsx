@@ -8,10 +8,13 @@ export type STATE = 'idle'|'master'|'slave'
 
 const MAX_PACKET_SIZE = 512
 
+declare const EVENT: { type: string, params: any }
+
 export interface Events {
     sendPCM(pcm:Float32Array):number;
     onReceive(bytes:Uint8Array):void;
     onError(error:string):void;
+    onEvent(event:Event): void;
 }
 
 export class TwoWayAudioSocket {
@@ -55,6 +58,7 @@ export class TwoWayAudioSocket {
         this.monitor = setInterval(() => {
             if (this.state == 'master' && this.last_packet < Date.now()-2000) {
                 this.state = 'idle'
+                this.events.onEvent({ type: "state", params: { value: this.state } })
                 this.transmitDataQueue()
             }
         }, 1000)
@@ -85,7 +89,10 @@ export class TwoWayAudioSocket {
                     that.expected_receive = 0
                 }
             }
-            setTimeout(hasReplay, 1000)
+
+            // Calculate how long it will take to play packet
+            let duration = (packet_bytes.length/44100)*1000
+            setTimeout(hasReplay, duration+100)
         }
     }
 
@@ -146,6 +153,7 @@ export class TwoWayAudioSocket {
                 if (typeof this.input_buffer.getByte(1) === 'undefined') {
                     console.log('packet type is undefined')
                     this.input_buffer.dumpBuffers()
+                    this.events.onError("desync_buffer")
                     return;
                 }
 
@@ -182,6 +190,8 @@ export class TwoWayAudioSocket {
                     this.state = 'idle';
                     this.input_buffer.clear()
                     this.sendStatusPacket('e', this.output_buffer.length()/30 > 255 ? 255 : Math.floor(this.output_buffer.length()/30), null, false)
+                    this.events.onError("corruption")
+                    this.events.onEvent({ type: "state", params: { value: this.state } })
                     return
                 }
 
@@ -196,6 +206,7 @@ export class TwoWayAudioSocket {
                     this.input_buffer.get(offset)
                 } else {
                     this.input_buffer.clear()
+                    this.events.onError("buffer_desync")
                 }
 
             }
@@ -208,6 +219,7 @@ export class TwoWayAudioSocket {
         if (packet[0] == "[".charCodeAt(0) && packet[packet.length-1] == "]".charCodeAt(0)) {
             if (packet[1] == "e".charCodeAt(0)) {
                 this.state = 'idle'
+                this.events.onEvent({ type: "state", params: { value: this.state } })
 
                 let blocks = Math.floor(this.output_buffer.length()/30)
                 if (blocks > packet[2]) {
@@ -230,6 +242,14 @@ export class TwoWayAudioSocket {
                         console.log(accepted_blocks+' accepted')
                         this.outgoing_block += accepted_blocks
                         this.output_buffer.drop(30*accepted_blocks) // drop 30 bytes per accepted block
+                        
+                        this.events.onEvent({
+                            type: "output_buffer",
+                            params: {
+                                length: this.output_buffer.length()
+                            }
+                        })
+
                     }
 
                     if (this.output_buffer.length() > 0)
@@ -240,6 +260,7 @@ export class TwoWayAudioSocket {
                 } else if (packet[1] == "f".charCodeAt(0)) {
                     // slave acknowledged being freed
                     this.state = 'idle'
+                    this.events.onEvent({ type: "state", params: { value: this.state } })
                 }
             } else if (this.state == 'slave') {
                 if (packet[1] == "p".charCodeAt(0)) {
@@ -283,6 +304,7 @@ export class TwoWayAudioSocket {
                 } else if (packet[1] == "t".charCodeAt(0)) {
                     // Master/slave status terminated
                     this.state = 'idle'
+                    this.events.onEvent({ type: "state", params: { value: this.state } })
                     this.sendStatusPacket('f', 0, null, false)
 
                 } else if (packet[1] == "m".charCodeAt(0)) {
@@ -293,6 +315,7 @@ export class TwoWayAudioSocket {
                     // Peer is asking for master status
                     // set slave status reply with slave [s]
                     this.state = 'slave'
+                    this.events.onEvent({ type: "state", params: { value: this.state } })
                     this.sendStatusPacket('s', 0, null, true)
 
                 } else if (packet[1] == "r".charCodeAt(0)) {
@@ -324,6 +347,7 @@ export class TwoWayAudioSocket {
     transmitDataQueue() {
         if (this.state == 'idle') {
             this.state = 'master'
+            this.events.onEvent({ type: "state", params: { value: this.state } })
 
             this.last_packet = Date.now()
             
@@ -333,6 +357,7 @@ export class TwoWayAudioSocket {
 
     transmitReset() {
         this.state = 'idle'
+        this.events.onEvent({ type: "state", params: { value: this.state } })
         this.sendStatusPacket('e', this.output_buffer.length()/30 > 255 ? 255 : Math.floor(this.output_buffer.length()/30), null, false)
     }
 

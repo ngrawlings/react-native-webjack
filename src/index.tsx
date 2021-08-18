@@ -2,7 +2,7 @@
 
 import { Encoder, EncoderConfig } from './Encoder'
 import { Decoder, DecoderConfig } from './Decoder'
-import { TwoWayAudioSocket, Events } from './TwoWayAudioSocket'
+import { TwoWayAudioSocket, Events, EVENT } from './TwoWayAudioSocket'
 
 let encoder_config:EncoderConfig = {
   sampleRate: 44100,
@@ -40,5 +40,6 @@ export {
   Decoder,
   DecoderConfig,
   TwoWayAudioSocket,
-  Events
+  Events,
+  EVENT
 }

@@ -8,13 +8,13 @@ export type STATE = 'idle'|'master'|'slave'
 
 const MAX_PACKET_SIZE = 512
 
-declare const EVENT: { type: string, params: any }
+export interface EVENT { type: string, params: any }
 
 export interface Events {
     sendPCM(pcm:Float32Array):number;
     onReceive(bytes:Uint8Array):void;
     onError(error:string):void;
-    onEvent(event:Event): void;
+    onEvent(event:EVENT): void;
 }
 
 export class TwoWayAudioSocket {

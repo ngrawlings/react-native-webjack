@@ -361,6 +361,12 @@ export class TwoWayAudioSocket {
         this.sendStatusPacket('e', this.output_buffer.length()/30 > 255 ? 255 : Math.floor(this.output_buffer.length()/30), null, false)
     }
 
+    transmissionFinished() {
+        this.state = 'idle'
+        this.events.onEvent({ type: "state", params: { value: this.state } })
+        this.sendStatusPacket('t', 0, null, false)
+    }
+
     stop() {
         clearInterval(this.monitor)
         this.output_buffer.clear()

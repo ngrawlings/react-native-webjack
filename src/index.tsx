@@ -33,4 +33,12 @@ let Webjack = {
   stop:() => { if (two_way_audio_socket != null) { two_way_audio_socket.stop(); two_way_audio_socket = null } }
 };
 
-export default Webjack;
+export {
+  Webjack,
+  Encoder,
+  EncoderConfig,
+  Decoder,
+  DecoderConfig,
+  TwoWayAudioSocket,
+  Events
+}

@@ -3,6 +3,7 @@
 import { Encoder, EncoderConfig } from './Encoder'
 import { Decoder, DecoderConfig } from './Decoder'
 import { TwoWayAudioSocket, Events, EVENT } from './TwoWayAudioSocket'
+import { HammingCodes } from './HammingCodes'
 
 let encoder_config:EncoderConfig = {
   sampleRate: 44100,
@@ -42,5 +43,6 @@ export {
   DecoderConfig,
   TwoWayAudioSocket,
   Events,
-  EVENT
+  EVENT,
+  HammingCodes
 }

@@ -65,14 +65,14 @@ export class HammingCodes {
         }
         if (parity[0])
             bitstore.setBit(0, true)
-            
+    
         return bitstore.getBytes().get(32)
     }
 
     static check(payload:Uint8Array|BitStore) {
         let len = (payload instanceof BitStore ? payload.length() : payload.length)
         if (len != 32)
-        throw "payload should be exactly 32 bytes long"
+            throw "payload should be exactly 32 bytes long"
 
         let bitstore:BitStore
         if (payload instanceof Uint8Array) {
@@ -99,10 +99,8 @@ export class HammingCodes {
 
         let parity = new Uint8Array(9)
 
-        let bzero = bitstore.getBit(0)
-        bitstore.setBit(0, false)
-
         // Check 8 collumn, check all bits of c1
+        parity[0] = (bitstore.getBit(0)?1:0)^(bitstore.getBit(1)?1:0)^(bitstore.getBit(2)?1:0)^(bitstore.getBit(4)?1:0)^(bitstore.getBit(8)?1:0)^(bitstore.getBit(16)?1:0)^(bitstore.getBit(32)?1:0)^(bitstore.getBit(64)?1:0)^(bitstore.getBit(128)?1:0)
         parity[1] = this.getByteParity(c0, 1, 8, 2) ^ this.getByteParity(c1, 1, 8, 2)
         parity[2] = this.getByteParity(c0, 2, 2, 1) ^ this.getByteParity(c0, 6, 2, 1) ^ this.getByteParity(c1, 2, 2, 1) ^ this.getByteParity(c1, 6, 2, 1)
         parity[3] = this.getByteParity(c0, 4, 4, 1) ^ this.getByteParity(c1, 4, 4, 1)
@@ -115,14 +113,13 @@ export class HammingCodes {
         let error = false
         let bit = 0
         for (let i=1, x=1; i<9; i++, x*=2) {
-            parity[0] = (parity[0]^parity[i])&(parity[0]|parity[i])
             if (parity[i]>0) {
                 error = true
                 bit |= x
             }
         }
 
-        if (!error && !bzero != parity[0]>0)
+        if (!error && parity[0]!=0)
             return 0;
 
         return error ? bit : -1
@@ -131,8 +128,6 @@ export class HammingCodes {
     static decode(payload:Uint8Array) {
         let bitstore:BitStore = new BitStore()
         bitstore.appendBytes(payload)
-
-        console.log('bitstore length: '+bitstore.length())
 
         let error_bit = HammingCodes.check(bitstore)
 

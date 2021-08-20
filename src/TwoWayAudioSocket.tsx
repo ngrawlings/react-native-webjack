@@ -50,7 +50,7 @@ export class TwoWayAudioSocket {
     outgoing_block = 0
     incoming_block = -1
 
-    monitor
+    monitor:any
 
     constructor(events:Events) {
         this.events = events

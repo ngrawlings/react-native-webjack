@@ -104,30 +104,6 @@ export default function App() {
         RawPcm.record();
       }
 
-      const randomBytes = (count:number) => {
-        let ret = Buffer.alloc(count)
-        for (let i=0; i<count; i++) {
-          ret[i] = Math.random()*0xFF
-        }
-        return ret
-      }
-      // Test and fnd a Hamming code failure
-      let code;
-      while(true) {
-        code = HammingCodes.encode(randomBytes(30)) 
-        console.log(code)
-        if (HammingCodes.check(Buffer.from(code)) != -1)
-          break; 
-      }
-
-      console.log('Failed code:', code)
-      let enc = new Uint8Array([53, 238, 255, 151, 161, 52, 211, 112, 120, 128, 52, 202, 98, 200, 89, 247, 95, 177, 66, 147, 34, 52, 137, 227, 73, 91, 220, 154, 22, 11, 177, 0])
-      let check = HammingCodes.check(Buffer.from(enc))
-      if (HammingCodes.check(Buffer.from(enc)) != -1)
-        console.log("Code Failed: "+check)
-      else 
-        console.log("Check ok")
-
     })();  
   }, []);
 

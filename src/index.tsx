@@ -26,6 +26,7 @@ let decoder:Decoder = new Decoder(decoder_cofig);
 let two_way_audio_socket:TwoWayAudioSocket|null = null;
 
 let Webjack = {
+  createSocket: (events:Events) => { return new TwoWayAudioSocket(events) },
   init: (events:Events) => { two_way_audio_socket = new TwoWayAudioSocket(events) },
   encode: (data:Uint8Array) => { return encoder.modulate(data); },
   decode: (data:Float32Array) => { return decoder.decode(data); },

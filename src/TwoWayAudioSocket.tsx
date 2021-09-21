@@ -126,6 +126,8 @@ export class TwoWayAudioSocket {
     processPCM(pcm:Float32Array) {
         let bytes = this.decoder.decode(pcm);
 
+        console.log("processPCM: Received "+bytes.length)
+
         if (bytes.length>0) {
             this.expected_receive = 0;
             this.input_buffer.append(bytes);

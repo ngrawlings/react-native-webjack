@@ -22,8 +22,8 @@ export class TwoWayAudioSocket {
 
     state:STATE = 'idle'
 
-    encoder:Encoder = new Encoder(default_config)
-    decoder:Decoder = new Decoder(default_config)
+    encoder:Encoder
+    decoder:Decoder
 
     output_buffer:ByteQueue = new ByteQueue()
     input_buffer:ByteQueue = new ByteQueue()
@@ -42,6 +42,9 @@ export class TwoWayAudioSocket {
 
     constructor(events:Events) {
         this.events = events
+
+        this.encoder = new Encoder(default_config)
+        this.decoder = new Decoder(default_config)
 
         this.monitor = setInterval(() => {
             if (this.state == 'master' && this.last_packet < Date.now()-2000) {
@@ -129,10 +132,14 @@ export class TwoWayAudioSocket {
         console.log("processPCM: Received "+bytes.length)
 
         if (bytes.length>0) {
-            this.expected_receive = 0;
-            this.input_buffer.append(bytes);
-            this.process();
+            this.appendBytes(bytes)
         }
+    }
+
+    appendBytes(bytes:Uint8Array) {
+        this.expected_receive = 0;
+        this.input_buffer.append(bytes);
+        this.process();
     }
 
     private process() {

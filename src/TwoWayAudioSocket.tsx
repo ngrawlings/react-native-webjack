@@ -1,3 +1,4 @@
+import default_config from './Config'
 import { Encoder } from './Encoder'
 import { Decoder } from './Decoder'
 import { ByteQueue } from './ByteQueue'
@@ -21,21 +22,8 @@ export class TwoWayAudioSocket {
 
     state:STATE = 'idle'
 
-    encoder:Encoder = new Encoder({
-        sampleRate: 44100,
-        baud: 1225,
-        freqLow:4900,
-        freqHigh:7350,
-        softmodem:true
-    })
-
-    decoder:Decoder = new Decoder({
-        sampleRate: 44100,
-        baud: 1225,
-        freqLow:4900,
-        freqHigh:7350,
-        softmodem:true
-    })
+    encoder:Encoder = new Encoder(default_config)
+    decoder:Decoder = new Decoder(default_config)
 
     output_buffer:ByteQueue = new ByteQueue()
     input_buffer:ByteQueue = new ByteQueue()

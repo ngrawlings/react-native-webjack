@@ -1,10 +1,4 @@
-export type DecoderConfig = {
-    sampleRate:number,
-    baud:number,
-    freqLow:number,
-    freqHigh:number,
-    softmodem:boolean
-};
+import type { EncoderConfig }  from './Config'
 
 type STATE = {
     current  : number,
@@ -64,11 +58,11 @@ export class Decoder {
       c : 0  // counter for the circular correlation arrays
     }
 
-    constructor(config:DecoderConfig) {
+    constructor(config:EncoderConfig) {
         this.setProfile(config)
     }
 
-    setProfile(config:DecoderConfig) {
+    setProfile(config:EncoderConfig) {
         this.baud = config.baud;
         this.freqLow = config.freqLow;
         this.freqHigh = config.freqHigh;

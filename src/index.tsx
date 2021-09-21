@@ -1,7 +1,9 @@
 //import { NativeModules } from 'react-native';
 
-import { Encoder, EncoderConfig } from './Encoder'
-import { Decoder, DecoderConfig } from './Decoder'
+import type { EncoderConfig } from './Config'
+
+import { Encoder } from './Encoder'
+import { Decoder } from './Decoder'
 import { TwoWayAudioSocket, Events, EVENT } from './TwoWayAudioSocket'
 import { HammingCodes } from './HammingCodes'
 
@@ -13,16 +15,8 @@ let encoder_config:EncoderConfig = {
   softmodem:true
 };
 
-let decoder_cofig:DecoderConfig = {
-  sampleRate: 44100,
-  baud: 1225,
-  freqLow:4900,
-  freqHigh:7350,
-  softmodem:true
-}
-
 let encoder:Encoder = new Encoder(encoder_config);
-let decoder:Decoder = new Decoder(decoder_cofig);
+let decoder:Decoder = new Decoder(encoder_config);
 let two_way_audio_socket:TwoWayAudioSocket|null = null;
 
 let Webjack = {
@@ -38,10 +32,9 @@ let Webjack = {
 
 export {
   Webjack,
-  Encoder,
   EncoderConfig,
+  Encoder,
   Decoder,
-  DecoderConfig,
   TwoWayAudioSocket,
   Events,
   EVENT,

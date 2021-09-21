@@ -1,12 +1,6 @@
 import { Resampler } from './Resampler'
 
-export type EncoderConfig = {
-    sampleRate:number,
-    baud:number,
-    freqLow:number,
-    freqHigh:number,
-    softmodem:boolean,
-};
+import type { EncoderConfig }  from './Config'
 
 export class Encoder {
 

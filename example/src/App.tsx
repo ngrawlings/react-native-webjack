@@ -1,10 +1,9 @@
-import { encode } from 'punycode';
 import * as React from 'react';
 
 import { StyleSheet, PermissionsAndroid, View, Text, Button, TextInput } from 'react-native';
 
 import RawPcm from 'react-native-raw-pcm';
-import { Webjack, EVENT, HammingCodes } from 'react-native-webjack';
+import { Webjack, EVENT } from 'react-native-webjack';
 
 import '../shim'
 
@@ -31,6 +30,11 @@ export default function App() {
 
   React.useEffect(() => {
     (async () => {
+
+      let pcm = Webjack.encode(new Uint8Array(Buffer.from('1234567890')))
+      let text = Buffer.from(Webjack.decode(pcm)).toString()
+      console.log(pcm, text)
+
       const granted = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
         {

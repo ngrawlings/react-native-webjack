@@ -10,7 +10,7 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <AudioTransfer />
+      <AudioTransfer style={{flex:1, flexDirection:'column', width:'100%'}} />
     </View>
   );
 }

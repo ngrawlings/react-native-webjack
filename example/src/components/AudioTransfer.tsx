@@ -127,7 +127,7 @@ export default function AudioTransfer(props: any) {
   
   const styles = StyleSheet.create({
     container: {
-      flex: 1,
+      flex:1, flexDirection:'column', width:'100%',
       alignItems: 'center',
       justifyContent: 'center',
     },

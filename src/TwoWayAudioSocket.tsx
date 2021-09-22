@@ -174,7 +174,9 @@ export class TwoWayAudioSocket {
 
                 } else {
 
-                    if (this.input_buffer.length() >= 4)
+                    if (type == 'a' && this.input_buffer.length() >= 6)
+                        packet = this.input_buffer.get(6)
+                    else if (this.input_buffer.length() >= 4)
                         packet = this.input_buffer.get(4)
                     else   
                         return

@@ -129,8 +129,6 @@ export class TwoWayAudioSocket {
     processPCM(pcm:Float32Array) {
         let bytes = this.decoder.decode(pcm);
 
-        console.log("processPCM: Received "+bytes.length)
-
         if (bytes.length>0) {
             this.appendBytes(bytes)
         }
@@ -165,8 +163,6 @@ export class TwoWayAudioSocket {
                     len |= this.input_buffer.getByte(3)&0xFF
                     len *= 32 // Convert from block coutn to byte length
 
-                    console.log('Packet: '+len)
-
                     if (this.input_buffer.length() >= len+7)
                         packet = this.input_buffer.get(len+7)
                     else
@@ -181,8 +177,6 @@ export class TwoWayAudioSocket {
                     else   
                         return
                 }
-
-                console.log(this.state, packet)
 
                 if (String.fromCharCode(packet[packet.length-1]) != ']') {
                     console.log("Data streem corruption, reseting state");
@@ -235,11 +229,13 @@ export class TwoWayAudioSocket {
 
                 } else if (packet[1] == 'a'.charCodeAt(0)) {
 
-                    let start_block = (Buffer.from(packet.subarray(3, 5))).readInt16LE()
+                    let start_block = ByteUtils.bytesToShort(packet.subarray(3, 5))
+                    console.log('accepting', packet, start_block)
+
                     let accepted_blocks = packet[2]
                     
                     if (accepted_blocks>0) {
-                        console.log("start block: "+start_block+" -> "+accepted_blocks+' accepted')
+                        console.log("start block: "+start_block+" -> "+(start_block+accepted_blocks)+' accepted')
 
                         let blk_count = (start_block+accepted_blocks) - this.outgoing_block
 
@@ -275,34 +271,35 @@ export class TwoWayAudioSocket {
                     let packet_bytes = packet.subarray(6, packet.length-1)
                     let blocks = 0
 
-                    console.log('first block', first_block)
-                    console.log('incoming_block', this.incoming_block)
-
-                    if ((((this.incoming_block+1) & 0xFFFF) == 0) && this.incoming_block+1 >= first_block) {
+                    // If next block act as usual, TODO: if past block accept with noop
+                    if ((this.incoming_block+1) >= first_block) {
                         while (packet_bytes.length>0) {
-                            let block:Uint8Array|null = packet_bytes.slice(0, 32)
-                            packet_bytes = packet_bytes.slice(32)
+                            if (((this.incoming_block+1) & 0xFFFF) == (first_block+blocks & 0xFFFF)) {
+                                let block:Uint8Array|null = packet_bytes.slice(0, 32)
+                                packet_bytes = packet_bytes.slice(32)
 
-                            if (this.incoming_block >= (first_block+blocks)) {
-                                blocks++
-                                continue
+                                if (this.incoming_block >= (first_block+blocks)) {
+                                    blocks++
+                                    continue
+                                }
+
+                                let unpacked = HammingCodes.decode(block)
+                                if (unpacked == null) {
+                                    console.log('block corrupted ', HammingCodes.unpack(block))
+                                    this.sendStatusPacket('a', blocks, packet.subarray(4, 6), true)
+                                    return
+                                }
+
+                                if (unpacked.length>0)
+                                    this.events.onReceive(unpacked)
+                                    
+                                this.incoming_block++
                             }
 
-                            let unpacked = HammingCodes.decode(block)
-                            if (unpacked == null) {
-                                console.log('block corrupted ', HammingCodes.unpack(block))
-                                this.sendStatusPacket('a', blocks, packet.subarray(4, 6), true)
-                                return
-                            }
-
-                            if (unpacked.length>0)
-                                this.events.onReceive(unpacked)
-
-                            blocks++
-                            this.incoming_block++
+                            blocks++  
                         }
                         this.incoming_block %= 0xFFFF
-                    }
+                    } 
                     
                     // Build packet hash confirmation packet
                     this.sendStatusPacket('a', blocks, packet.subarray(4, 6), true)

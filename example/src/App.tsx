@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { StyleSheet, View } from 'react-native';
 
-import AudioTransfer from './components/AudioTransfer'
+//import AudioTransfer from './components/AudioTransfer'
+import InfiniteStream from './components/InfiniteStream'
 
 import '../shim'
 
@@ -10,7 +11,7 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <AudioTransfer style={{flex:1, flexDirection:'column', width:'100%'}} />
+      <InfiniteStream style={{flex:1, flexDirection:'column', width:'100%'}} />
     </View>
   );
 }

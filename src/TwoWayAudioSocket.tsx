@@ -344,7 +344,7 @@ export class TwoWayAudioSocket {
     }
 
     sendPaddedPacket(bytes:Buffer) {
-        bytes = Buffer.concat([bytes, Buffer.alloc(bytes.length%30)])
+        bytes = Buffer.concat([bytes, Buffer.alloc(30-bytes.length%30)])
         this.output_buffer.append(bytes)
         this.transmitDataQueue()
     }

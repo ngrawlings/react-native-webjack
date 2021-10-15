@@ -16,35 +16,8 @@ export class ByteQueue {
     }
 
     get(count:number) {
-        let available = this.length()
-        if (available<count)
-            count = available
-
-        let ret:Uint8Array = new Uint8Array(count)
-        let ret_pos = this.buffers[0].length - this.first_buffer_position
-
-        if (count < ret_pos) {
-            ret.set(this.buffers[0].subarray(this.first_buffer_position, this.first_buffer_position+count), 0);
-            this.first_buffer_position += count;
-
-            return ret;
-        } else {
-            ret.set(this.buffers[0].subarray(this.first_buffer_position, this.buffers[0].length), 0);
-            this.first_buffer_position = 0;
-            this.buffers.splice(0, 1)
-        }
-
-        while (ret_pos < count) {
-            if (count-ret_pos < this.buffers[0].length) {
-                ret.set(this.buffers[0].subarray(0, count-ret_pos), ret_pos);
-                this.first_buffer_position = count-ret_pos;
-                ret_pos += count-ret_pos;
-            } else {
-                ret.set(this.buffers[0], ret_pos);
-                ret_pos += this.buffers[0].length;
-                this.buffers.splice(0, 1)
-            }
-        }
+        let ret:Uint8Array = this.peek(count)
+        this.drop(ret.length)
 
         return ret
     }
@@ -87,13 +60,13 @@ export class ByteQueue {
 
         this.first_buffer_position += count;
 
-        while (this.buffers.length>0 && this.first_buffer_position > this.buffers[0].length) {
+        while (this.buffers.length>0 && this.first_buffer_position >= this.buffers[0].length) {
             this.first_buffer_position -= this.buffers[0].length
             this.buffers.splice(0, 1)
         }
 
         if (this.first_buffer_position < 0)
-            this.first_buffer_position = 0
+            throw "Bytes were lost in buffer drop, this is a serious bug"
     }
 
     clear() {

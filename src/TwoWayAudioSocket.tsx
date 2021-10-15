@@ -239,6 +239,8 @@ export class TwoWayAudioSocket {
 
                         let blk_count = (start_block+accepted_blocks) - this.outgoing_block
 
+                        console.log('Moving '+blk_count+' forward '+(blk_count*30)+' bytes')
+
                         this.outgoing_block += blk_count
                         this.outgoing_block %= 0xFFFF
 

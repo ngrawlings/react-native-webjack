@@ -103,9 +103,9 @@ export class TwoWayAudioSocket {
                 let blk = bytes.subarray(i*30, (i+1)*30)
 
                 if (blk.length < 30) {
-                    let tmp = new Uint8Array(30);
-                    tmp.set(blk, 0)
-                    blk = tmp
+                    // Do not send unpadded last bytes, this is to allow manual padding which is more efficient
+                    // Use instead sendPaddedPacket
+                    break
                 }
 
                 send_bytes.set(HammingCodes.encode(blk), i*32)
@@ -341,6 +341,12 @@ export class TwoWayAudioSocket {
 
     appendToDataQueue(bytes:Uint8Array) {
         this.output_buffer.append(bytes)
+    }
+
+    sendPaddedPacket(bytes:Buffer) {
+        bytes = Buffer.concat([bytes, Buffer.alloc(bytes.length%30)])
+        this.output_buffer.append(bytes)
+        this.transmitDataQueue()
     }
 
     getState() {

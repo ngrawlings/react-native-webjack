@@ -23,31 +23,34 @@ export class ByteQueue {
     }
 
     peek(count:number) {
+        if (this.buffers.length == 0)
+            return new Uint8Array(0)
+
         let available = this.length()
         if (available<count)
             count = available
 
         let ret:Uint8Array = new Uint8Array(count)
-        let buffer_index = 1;
+        let buffer_index = 1
         let ret_pos = this.buffers[0].length - this.first_buffer_position
 
         if (count < ret_pos) {
-            ret.set(this.buffers[0].subarray(this.first_buffer_position, this.first_buffer_position+count), 0);
-            return ret;
+            ret.set(this.buffers[0].subarray(this.first_buffer_position, this.first_buffer_position+count), 0)
+            return ret
         } else {
-            ret.set(this.buffers[0].subarray(this.first_buffer_position, this.buffers[0].length), 0);
+            ret.set(this.buffers[0].subarray(this.first_buffer_position, this.buffers[0].length), 0)
         }
 
         while (ret_pos < count) {
             if (count-ret_pos < this.buffers[buffer_index].length) {
-                ret.set(this.buffers[buffer_index].subarray(0, count-ret_pos), ret_pos);
+                ret.set(this.buffers[buffer_index].subarray(0, count-ret_pos), ret_pos)
                 this.first_buffer_position = count-ret_pos;
-                ret_pos += count-ret_pos;
+                ret_pos += count-ret_pos
                 buffer_index++
             } else {
                 ret.set(this.buffers[buffer_index], ret_pos);
                 ret_pos += this.buffers[buffer_index].length;
-                buffer_index++;
+                buffer_index++
             }
         }
 
